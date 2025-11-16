@@ -1,0 +1,72 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © idofpriyam
+
+//@version=5
+indicator("Print Current Price")
+
+
+printLabel(string txt, float price = na) =>
+    int labelTime = math.max(last_bar_time, chart.right_visible_bar_time)
+    var label result = label.new(
+         labelTime, na, txt, xloc.bar_time, na(price) ? yloc.abovebar : yloc.price, na,
+         label.style_none, chart.fg_color, size.large
+     )
+    label.set_text(result, txt)
+    label.set_y(result, price)
+    result
+
+//@variable A formatted string containing information about the current chart.
+string chartInfo = str.format(
+     "Symbol: {0}:{1}\nTimeframe: {2}",
+     syminfo.prefix, syminfo.ticker, timeframe.period
+ )
+
+//@variable A formatted string containing OHLCV values.
+string ohlcvInfo = str.format(
+     "O: {0, number, #.#####}, H: {1, number, #.#####}, L: {2, number, #.#####}, C: {3, number, #.#####}, V: {4}",
+     open, high, low, close, str.tostring(volume, format.volume)
+ )
+ //@variable A formatted string containing OHLCV values.
+length =1000
+mean_1000_closes = ta.sma(close, length)
+// Calculate the variance
+var_1000_closes = ta.variance(close, length)
+// Calculate the standard deviation (sigma)
+sigma_1000_closes = math.sqrt(var_1000_closes)
+// Parameters for d1 calculation
+S = close  // Current price (last close price)
+K = 1      // Strike price (1 as a placeholder)
+T = 1 / 1440  // Time to expiration (1 minute)
+r = 0.05   // Risk-free interest rate
+q = 0      // Dividend yield (not applicable for Forex and Crypto)
+
+// Calculate d1 using the formula
+d1 = (math.log(S / K) + (r + sigma_1000_closes * sigma_1000_closes / 2) * T) / (sigma_1000_closes * math.sqrt(T))
+
+// Custom sign function
+sign(x) =>
+    x > 0 ? 1 : (x < 0 ? -1 : 0)
+
+// Helper functions for norm.cdf and norm.pdf
+norm_pdf(x) =>
+    1 / math.sqrt(2 * math.pi) * math.exp(-0.5 * x * x)
+
+norm_cdf(x) =>
+    0.5 * (1 + sign(x) * (1 - math.exp(-0.5 * x * x * (0.07056 * x * x + 3.7201) / (x * x + 13.459))))
+
+// Calculate delta, gamma, and vega
+delta = math.exp(-q * T) * norm_cdf(d1)
+gamma = (math.exp(-q * T) * norm_pdf(d1)) / (S * sigma_1000_closes * math.sqrt(T))
+vega = S * math.exp(-q * T) * norm_pdf(d1) * math.sqrt(T)
+string greeksInfo = str.format(
+     "Sigma: {0, number, #.#####}, Delta: {1, number, #.#####}, Gamma: {2, number, #.#####}, Vegga: {3, number, #.#####}, V: {4}",
+     sigma_1000_closes, d1, gamma, vega, str.tostring(volume, format.volume)
+ )
+
+// Print "Hello world!" and the `chartInfo` at the end of the chart on the first bar.
+if barstate.isfirst
+    printLabel(chartInfo + "\n\n\n")
+
+// Print current `ohlcvInfo` at the end of the chart, updating the displayed text as new data comes in.
+printLabel(ohlcvInfo+ "\n\n")
+printLabel(greeksInfo)
